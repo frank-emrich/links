@@ -1,0 +1,300 @@
+########################################################################
+# Permission is hereby granted, free of charge, to any person
+# obtaining a copy of this file, to deal in the File without
+# restriction, including without limitation the rights to use,
+# copy, modify, merge, publish, distribute, sublicense, and/or
+# sell copies of the File, and to permit persons to whom the
+# File is furnished to do so, subject to the following condition:
+#
+# THE FILE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+# OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+# OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE FILE OR
+# THE USE OR OTHER DEALINGS IN THE FILE.
+
+########################################################################
+# The standard OMakefile.
+# You will usually need to modify this file for your project.
+
+
+########################################################################
+# Phony targets are scoped, so you probably want to declare them first.
+#
+
+# .PHONY: all install clean
+
+########################################################################
+# Subdirectories.
+# You may want to include some subdirectories in this project.
+# If so, define the subdirectory targets and uncomment this section.
+#
+
+# .SUBDIRS:
+
+########################################################################
+# C configuration.
+# Delete this section if you are not building C files.
+#
+
+################################################
+# Configuration.  You might want to modify any of these
+# configuration variables.
+#
+
+# CFLAGS +=
+# ASFLAGS +=
+# LDFLAGS +=
+# INCLUDES +=
+
+################################################
+# Uncomment the following section if you want
+# to build a C program in the current directory.
+#
+
+# CFILES[] =
+#    file1
+#    main
+#
+# MAIN = main
+#
+# .DEFAULT: $(CProgram $(MAIN), $(CFILES))
+
+################################################
+# Uncomment the following section if you want to build a C library
+# in the current directory.
+#
+
+# LIBFILES[] =
+#    file1
+#    file2
+#
+# LIB = libxxx
+#
+# .DEFAULT: $(StaticCLibrary $(LIB), $(LIBFILES))
+
+########################################################################
+# OCaml configuration.
+# Delete this section if you are not building OCaml files.
+#
+
+################################################
+# Configuration.  You may want to modify any of these configuration
+# variables.
+#
+
+include Makefile.config
+
+#
+# This project requires ocamlfind (default - false).
+#
+USE_OCAMLFIND = true
+OCAMLFINDFLAGS=-syntax camlp4o
+OCAMLPACKS[] =
+  str
+  deriving.syntax
+  deriving.syntax.classes
+  deriving.runtime
+  lwt
+  lwt.syntax
+  lwt.unix
+  cgi
+  base64
+  cohttp
+  cohttp.lwt
+  unix
+
+DB_CODE[] =
+THREADS = false
+
+if $(defined SQLITE_LIBDIR)
+  DB_CODE    += lite_database.ml
+  OCAMLPACKS += sqlite
+  export
+
+if $(defined SQLITE3_LIBDIR)
+  DB_CODE    += lite3_database
+  OCAMLPACKS += sqlite3
+  export
+
+if $(defined MYSQL_LIBDIR)
+  DB_CODE    += mysql_database
+  OCAMLPACKS += mysql
+  export
+
+if $(defined POSTGRESQL_LIBDIR)
+  DB_CODE    += pg_database
+  OCAMLPACKS += postgresql
+  THREADS = true
+  export
+
+if $(defined MONETDB5_LIBDIR)
+  DB_CODE    += m5_database
+  OCAMLPACKS += mapi
+  THREADS = true
+  export
+
+
+#
+# if $(not $(OCAMLFIND_EXISTS))
+#    eprintln(This project requires ocamlfind, but is was not found.)
+#    eprintln(You need to install ocamlfind and run "omake --configure".)
+#    exit 1
+
+#
+# Include path
+#
+# OCAMLINCLUDES +=
+
+#
+# Compile native or byte code? 
+#
+# The default values are defined as follows:
+#
+# NATIVE_ENABLED = $(OCAMLOPT_EXISTS)
+# BYTE_ENABLED = $(not $(OCAMLOPT_EXISTS))
+#
+# Various options
+#
+OCAMLFLAGS    = -dtypes -w Ae-44-45 -g -cclib -lunix $(if $(THREADS), -thread)
+# OCAMLCFLAGS   +=
+# OCAMLOPTFLAGS +=
+# OCAML_LINK_FLAGS +=
+# OCAML_BYTE_LINK_FLAGS +=
+# OCAML_NATIVE_LINK_FLAGS +=
+
+################################################
+# Generated files
+#
+# Workaround for the fact that ocamldep does not pay attention to .mll
+# and .mly files.
+#
+
+GENFILES[] = parser.ml parser.mli lexer.ml \
+  xmlParser.ml xmlParser.mli xmlLexer.ml \
+  jsonparse.ml jsonparse.mli jsonlex.ml
+OCamlGeneratedFiles($(GENFILES))
+
+################################################
+# Build an OCaml library
+#
+
+# FILES[] =
+#    file1
+#    file2
+#
+# LIB = main
+#
+# .DEFAULT: $(OCamlLibrary $(LIB), $(FILES))
+
+################################################
+# Build an OCaml program
+#
+
+OPC[] =
+  getopt
+  PP
+  unionfind
+
+
+FILES[] =
+  $(OPC)
+  $(DB_CODE)
+  basicsettings
+  buildTables
+  chaser
+  checkXmlQuasiquotes
+  closures
+  compilePatterns
+  constant
+  database
+  debug
+  defaultAliases
+  desugarCP
+  desugarDatatypes
+  desugarDbs
+  desugarFormlets
+  desugarFors
+  desugarFuns
+  desugarInners
+  desugarLAttributes
+  desugarModules
+  desugarPages
+  desugarProcesses
+  desugarRegexes
+  dumpTypes
+  env
+  errors
+  evalir
+  eventHandlers
+  fixTypeAbstractions
+  frontend
+  generalise
+  graph
+  instantiate
+  ir
+  irtojs
+  js
+  json
+  jsonlex
+  jsonparse
+  lexer
+  lib
+  links
+  linksregex
+  loader
+  moduleUtils
+  multipart
+  notfound
+  parse
+  parseXml
+  parser
+  performance
+  proc
+  processTypes
+  query
+  queryshredding
+  refineBindings
+  regex
+  requestData
+  resolveJsonState
+  resolvePositions
+  settings
+  sourceCode
+  sugarTraversals
+  sugartoir
+  sugartypes
+  tables
+  transformSugar
+  typeSugar
+  typeUtils
+  types
+  typevarcheck
+  unify
+  utility
+  value
+  var
+  webif
+  webserver
+  webserver_types
+  xmlLexer
+  xmlParser
+PROGRAM = links
+
+#OCAML_LIBS +=unix.cma
+
+# OCAML_CLIBS +=
+# OCAML_OTHER_LIBS +=
+# OCAML_LIB_FLAGS +=
+#
+OCamlProgram( $(PROGRAM), $(FILES))
+.DEFAULT: $(if $(BYTE_ENABLED), $(PROGRAM).run) \
+          $(if $(NATIVE_ENABLED), $(PROGRAM).opt)
+
+
+.PHONY: clean
+clean:
+  rm -f \
+     $(filter-proper-targets $(glob $(addsuffix .*, $(FILES)))) \
+     $(PROGRAM).run $(PROGRAM).opt
