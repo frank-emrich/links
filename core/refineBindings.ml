@@ -33,7 +33,6 @@ let refine_bindings : binding list -> binding list =
                * aren't introduced yet. *)
               | Handler _
               | Module _
-              | QualifiedImport _
               | AlienBlock _
               | Funs _ -> assert false
               | Exp _
@@ -271,7 +270,6 @@ module RefineTypeBindings = struct
 	  match binding with
           | Handler _  (* Desugared at this point *)
           | Module _
-          | QualifiedImport _
           | AlienBlock _
           | Funs _ -> assert false
           | Fun _

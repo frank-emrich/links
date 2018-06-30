@@ -40,7 +40,6 @@ struct
 
   let rec opt_generalisable o = opt_app is_pure true o
   and is_pure p = match p.node with
-    | QualifiedVar _
     | Constant _
     | Var _
     | FunLit _
@@ -109,7 +108,6 @@ struct
     | DBUpdate _ -> false
   and is_pure_binding ({node ; _ }: binding) = match node with
       (* need to check that pattern matching cannot fail *)
-    | QualifiedImport _
     | AlienBlock _
     | Module _
     | Fun _
@@ -3545,7 +3543,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             TryInOtherwise
               (erase try_phrase, erase_pat pat, erase in_phrase,
                 erase unless_phrase, Some return_type), return_type, usages_res
-        | QualifiedVar _ -> assert false
         | Raise -> (Raise, Types.fresh_type_variable (lin_any, res_any), StringMap.empty)
     in with_pos pos e, t, usages
 
@@ -3861,7 +3858,6 @@ and type_binding : context -> binding -> binding * context * usagemap =
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e
       | Handler _
-      | QualifiedImport _
       | AlienBlock _
       | Module _ -> assert false
     in
