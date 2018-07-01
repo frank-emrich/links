@@ -4,6 +4,7 @@ open SourceCode
 open Lens_operators
 open Lens_utility
 
+module QualifiedName = Sugartypes.QualifiedName
 module Alias = Lens_alias
 
 type t = lens_phrase
@@ -29,17 +30,17 @@ let name_of_var expr =
   | Sugartypes.Var n -> n
   | _ -> failwith "Expected var."
 
-let of_phrase p =
+let of_phrase (p : Sugartypes.phrase) =
   let rec f p =
     match WithPos.node p with
     | Sugartypes.Constant c -> Constant c
-    | Sugartypes.Var v -> Var v
+    | Sugartypes.Var v -> Var (QualifiedName.unqualify v) (* TODO FIXME. *)
     | Sugartypes.UnaryAppl ((_, op), phrase) -> UnaryAppl (Unary.from_links op, f phrase)
     | Sugartypes.InfixAppl ((_, op), phrase1, phrase2) -> InfixAppl (Binary.of_supertype_operator op, f phrase1, f phrase2)
     | Sugartypes.TupleLit l -> TupleLit (List.map f l)
     | Sugartypes.FnAppl (fn, arg) ->
       begin
-        match name_of_var fn with
+        match QualifiedName.unqualify (name_of_var fn) (* TODO FIXME. *) with
         | "not" -> UnaryAppl ((Unary.Name "!"), f (List.hd arg))
         | _ -> failwith "Unsupported function"
       end

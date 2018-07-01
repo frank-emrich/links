@@ -45,8 +45,8 @@ let var_name (var : phrase) =
 
 let cols_of_phrase (key : phrase) : string list =
     match WithPos.node key with
-    | TupleLit keys -> List.map var_name keys
-    | Var name -> [name]
+    | TupleLit keys -> List.map (QualifiedName.unqualify -<- var_name) keys (* TODO FIXME. *)
+    | Var name -> [QualifiedName.unqualify name] (* TODO FIXME. *)
     | _ -> failwith "Expected a tuple or a variable."
 
 let select_lens_sort (sort : Lens_sort.t) (pred : lens_phrase) : Lens_sort.t =

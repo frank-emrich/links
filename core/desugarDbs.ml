@@ -1,6 +1,7 @@
 open CommonTypes
 open Sugartypes
 open SugarConstructors.DummyPositions
+module QualifiedName = Sugartypes.QualifiedName
 
 (*
   Desugaring database stuff
@@ -71,8 +72,10 @@ object (o : 'self_type)
         let o, (e : Sugartypes.phrasenode) =
           match returning with
             | None ->
-                (o, fn_appl_node insert_rows tyvars [table; rows])
+               let insert_rows = QualifiedName.of_name insert_rows in
+               (o, fn_appl_node insert_rows tyvars [table; rows])
             | Some field ->
+                let insert_returning = QualifiedName.of_name insert_returning in
                 let o, field, _ = o#phrase field in
                 (o, fn_appl_node insert_returning tyvars [table; rows; field])
         in (o, e, Types.unit_type)
