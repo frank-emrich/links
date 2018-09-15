@@ -32,12 +32,13 @@ let refine_bindings : binding list -> binding list =
               (* Modules & qualified imports will have been eliminated by now. Funs
                * aren't introduced yet. *)
               | Handler _
-              | Module _
               | AlienBlock _
               | Funs _ -> assert false
               | Exp _
               | Foreign _
               | Type _
+              | Module _
+              | Import _
               | Val _ ->
                  (* collapse the group we're collecting, then start a
                      new empty group *)
@@ -269,11 +270,12 @@ module RefineTypeBindings = struct
         List.fold_right (fun ({node=binding; _} as bind) (currentGroup, otherGroups) ->
 	  match binding with
           | Handler _  (* Desugared at this point *)
-          | Module _
           | AlienBlock _
           | Funs _ -> assert false
           | Fun _
           | Foreign _
+          | Module _
+          | Import _
           | Val _
           | Exp _
           | Infix ->
