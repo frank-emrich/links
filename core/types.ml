@@ -2745,3 +2745,10 @@ let pp_lens_sort : Format.formatter -> lens_sort -> unit = fun fmt ls ->
 let unwrap_list_type = function
   | `Application ({Abstype.id = "List"; _}, [`Type t]) -> t
   | _ -> assert false
+
+let pp_module_t : Format.formatter -> module_t -> unit = fun fmt mt ->
+  let rec decycle_module mt  = {
+      fields = StringMap.map DecycleTypes.datatype mt.fields;
+      modules = StringMap.map decycle_module mt.modules;
+    } in
+  pp_module_t fmt (decycle_module mt)
