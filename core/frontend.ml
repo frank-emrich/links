@@ -3,15 +3,15 @@ open Utility
 module Pipeline :
 sig
   val program :
-    Types.typing_environment ->
+    Types.FrontendTypeEnv.t ->
     SourceCode.source_code ->
     Sugartypes.program ->
-    ((Sugartypes.program * Types.datatype * Types.typing_environment) * string list)
+    ((Sugartypes.program * Types.datatype * Types.FrontendTypeEnv.t) * string list)
   val interactive :
-    Types.typing_environment ->
+    Types.FrontendTypeEnv.t ->
     SourceCode.source_code ->
     Sugartypes.sentence ->
-    Sugartypes.sentence * Types.datatype * Types.typing_environment
+    Sugartypes.sentence * Types.datatype * Types.FrontendTypeEnv.t
 end
 =
 struct
@@ -51,7 +51,7 @@ struct
        ->- DesugarHandlers.desugar_handlers_early#program
        ->- DesugarLAttributes.desugar_lattributes#program
        ->- RefineBindings.refine_bindings#program
-       ->- DesugarDatatypes.program tyenv.Types.tycon_env
+       ->- DesugarDatatypes.program tyenv.Types.FrontendTypeEnv.tycon_env
        ->- TypeSugar.Check.program tyenv
         (*->- after_typing ((FixTypeAbstractions.fix_type_abstractions tyenv)#program ->- snd3)*)
        ->- after_typing ((DesugarCP.desugar_cp tyenv)#program ->- snd3)
