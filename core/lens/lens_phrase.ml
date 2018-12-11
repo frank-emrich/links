@@ -4,7 +4,6 @@ open SourceCode
 open Lens_operators
 open Lens_utility
 
-module QualifiedName = Sugartypes.QualifiedName
 module Alias = Lens_alias
 
 type t = lens_phrase

@@ -1,7 +1,6 @@
 open CommonTypes
 open Sugartypes
 open SugarConstructors.DummyPositions
-module QualifiedName = Sugartypes.QualifiedName
 
 (*
   Desugaring database stuff
