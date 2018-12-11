@@ -23,11 +23,11 @@ module Utils : sig
   val instantiate_typ : Types.datatype -> (Types.type_arg list * Types.datatype)
 
   (* FIXME: Check if we need to pass the whole environment here, too, so that we can respect variables bound in module env *)
-  val instantiate : FrontendTypeEnv.var_environment -> string ->
+  val instantiate : FrontendTypeEnv.qual_var_environment -> string ->
                     (Types.type_arg list * Types.datatype)
 
   (* FIXME: Check if we need to pass the whole environment here, too, so that we can respect variables bound in module env *)
-  val generalise : FrontendTypeEnv.var_environment -> Types.datatype ->
+  val generalise : FrontendTypeEnv.qual_var_environment -> Types.datatype ->
                    ((Types.quantifier list*Types.type_arg list) * Types.datatype)
 
   (* val is_pure : phrase -> bool *)
@@ -1374,9 +1374,9 @@ end
 
 type context = FrontendTypeEnv.t = {
   (* mapping from variables to type schemes *)
-  var_env   : FrontendTypeEnv.var_environment ;
+  var_env   : FrontendTypeEnv.qual_var_environment ;
 
-  module_env : FrontendTypeEnv.module_environment;
+  module_env : FrontendTypeEnv.qual_module_environment;
 
   (* mapping from type alias names to the types they name.  We don't
      use this to resolve aliases in the code, which is done before
@@ -1395,8 +1395,12 @@ let empty_context eff =
     module_env = Env.empty;
     effect_row = eff }
 
-let bind_var context (v, t) = {context with var_env = Env.bind context.var_env (v,t)}
+
+(* The binding functions must not be used for variable get in scope because they are inside of a module that's opened/imported *)
+let bind_var context (v, t) = {context with var_env = Env.bind context.var_env (v, (None, t))}
 let unbind_var context v = {context with var_env = Env.unbind context.var_env v}
+
+
 let bind_tycon context (v, t) = {context with tycon_env = Env.bind context.tycon_env (v,t)}
 let bind_effects context r = {context with effect_row = r}
 
@@ -1771,7 +1775,7 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
     else
       List.map fst (StringMap.bindings binderss)
 
-let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv.var_environment * Types.datatype =
+let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv.qual_var_environment * Types.datatype =
   let make_singleton_row =
     match closed with
       | `Closed -> Types.make_singleton_closed_row
@@ -1787,9 +1791,10 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
      using types from the inner type.
 
   *)
-  let rec type_pattern {node = pattern; pos = pos'} : Pattern.with_pos * FrontendTypeEnv.var_environment * (Types.datatype * Types.datatype) =
+  let rec type_pattern {node = pattern; pos = pos'} : Pattern.with_pos * FrontendTypeEnv.qual_var_environment * (Types.datatype * Types.datatype) =
     let _UNKNOWN_POS_ = "<unknown>" in
     let tp = type_pattern in
+    let bind env (n, t) = Env.bind env (n, (None, t)) in
     let unify (l, r) = unify_or_raise ~pos:pos' (l, r)
     and erase (p,_, _) = p
     and ot (_,_,(t,_)) = t
@@ -1798,7 +1803,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
     and pos ({pos = p;_},_,_) = Position.Resolved.resolve p |> Position.Resolved.source_expression
     and (++) = Env.extend in
     let (p, env, (outer_type, inner_type)) :
-      Pattern.t * FrontendTypeEnv.var_environment * (Types.datatype * Types.datatype) =
+      Pattern.t * FrontendTypeEnv.qual_var_environment * (Types.datatype * Types.datatype) =
       let open Pattern in
       match pattern with
       | Nil ->
@@ -1813,7 +1818,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
       | Variable bndr ->
         let xtype = Types.fresh_type_variable (lin_any, res_any) in
         (Variable (Binder.set_type bndr xtype),
-         Env.bind Env.empty (Binder.to_name bndr, xtype),
+         bind Env.empty (Binder.to_name bndr, xtype),
          (xtype, xtype))
       | Cons (p1, p2) ->
         let p1 = tp p1
@@ -1846,7 +1851,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
         Variant (name, Some (erase p)), env p, (vtype ot, vtype it)
       | Effect (name, ps, k) ->
          (* Auxiliary machinery for typing effect patterns *)
-         let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * FrontendTypeEnv.var_environment * (Types.datatype * Types.datatype) =
+         let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * FrontendTypeEnv.qual_var_environment * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
              let domain   = Types.fresh_type_variable (lin_unl, res_any) in
              let codomain = Types.fresh_type_variable (lin_unl, res_any) in
@@ -1862,10 +1867,10 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
            | Variable bndr ->
               let xtype = fresh_resumption_type () in
               ( with_pos pos' (Variable (Binder.set_type bndr xtype))
-              , Env.bind Env.empty (Binder.to_name bndr, xtype), (xtype, xtype))
+              , bind Env.empty (Binder.to_name bndr, xtype), (xtype, xtype))
            | As (bndr, pat') ->
               let p = type_resumption_pat pat' in
-              let env' = Env.bind (env p) (Binder.to_name bndr, it p) in
+              let env' = bind (env p) (Binder.to_name bndr, it p) in
               with_pos pos' (As ((Binder.set_type bndr (it p), erase p))), env', (ot p, it p)
            | HasType (p, (_, Some t)) ->
               let p = type_resumption_pat p in
@@ -1954,7 +1959,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
         Tuple (List.map erase ps'), env', (make_tuple ot, make_tuple it)
       | As (bndr, p) ->
         let p = tp p in
-        let env' = Env.bind (env p) (Binder.to_name bndr, it p) in
+        let env' = bind (env p) (Binder.to_name bndr, it p) in
         As (Binder.set_type bndr (it p), erase p), env', (ot p, it p)
       | HasType (p, (_,Some t as t')) ->
         let p = tp p in
@@ -1968,7 +1973,8 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * FrontendTypeEnv
     let pos, env, (outer_type, _) = type_pattern pattern in
     pos, env, outer_type
 
-let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
+let rec pattern_env : Pattern.with_pos -> FrontendTypeEnv.qual_var_environment =
+  let bind env (v, t) = Env.bind env (v, (None, t)) in
   fun { node = p; _} -> let open Pattern in
   match p with
     | Any
@@ -1989,9 +1995,9 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | Cons (h,t) -> Env.extend (pattern_env h) (pattern_env t)
     | List ps
     | Tuple ps -> List.fold_right (pattern_env ->- Env.extend) ps Env.empty
-    | Variable {node=v, Some t; _} -> Env.bind Env.empty (v, t)
+    | Variable {node=v, Some t; _} -> bind Env.empty (v, t)
     | Variable {node=_, None; _} -> assert false
-    | As       ({node=v, Some t; _}, p) -> Env.bind (pattern_env p) (v, t)
+    | As       ({node=v, Some t; _}, p) -> bind (pattern_env p) (v, t)
     | As       ({node=_, None; _}, _) -> assert false
 
 
@@ -2003,7 +2009,7 @@ let update_pattern_vars env =
     fun n ->
       let open Pattern in
       let update bndr =
-        let ty = Env.lookup env (Binder.to_name bndr) in
+        let (_, ty) = Env.lookup env (Binder.to_name bndr) in
         Binder.set_type bndr ty
       in match n with
          | Variable b -> Variable (update b)
@@ -2011,7 +2017,7 @@ let update_pattern_vars env =
          | _ -> super#patternnode n
  end)#pattern
 
-let rec extract_formlet_bindings : phrase -> Types.datatype Env.t = fun p ->
+let rec extract_formlet_bindings : phrase -> FrontendTypeEnv.qual_var_environment = fun p ->
   match p.node with
   | FormBinding (_, pattern) -> pattern_env pattern
   | Xml (_, _, _, children) ->
@@ -2130,14 +2136,14 @@ let lookup_qualified_variable pos context qname : Types.datatype =
     | `Ident name ->
       begin match Env.find context.var_env name with
         | None -> Gripers.unknown_variable pos qname
-        | Some t ->  t
+        | Some (_, t) ->  t
       end
     | `Dot (first_module, remainder) ->
       begin match Env.find context.module_env first_module with
         | None ->
           let module_path_until_failure = QualifiedName.prefix 1 qname in
           Gripers.unknown_module pos module_path_until_failure
-        | Some first_module_type ->
+        | Some (_, first_module_type) ->
           traverse_module_path 1 remainder first_module_type
       end
 
@@ -2198,7 +2204,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let body = type_check (context ++ pattern_env pat) body in
              let () = unify ~handle:Gripers.switch_branches
                (pos_and_typ body, no_pos bt) in
-             let () = Env.iter (fun v t -> let uses = uses_of v (usages body) in
+             let () = Env.iter (fun v (_, t) -> let uses = uses_of v (usages body) in
                                            if uses <> 1 then
                                              if Types.type_can_be_unl t then
                                                Types.make_type_unl t
@@ -2335,7 +2341,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                       effect_row = effects}) body in
 
             let () =
-              Env.iter (fun v t ->
+              Env.iter (fun v (_, t) ->
                 let uses = uses_of v (usages body) in
                   if uses <> 1 then
                     if Types.type_can_be_unl t then
@@ -2348,7 +2354,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               if DeclaredLinearity.is_nonlinear lin then
                 StringMap.iter (fun v _ ->
                                 if not (List.mem v vs) then
-                                  let t = Env.lookup env' v in
+                                  let (_, t) = Env.lookup env' v in
                                   if Types.type_can_be_unl t then
                                     Types.make_type_unl t
                                   else
@@ -3270,6 +3276,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              | None -> (henv, [], descr)
            in
            let type_cases val_cases eff_cases =
+             let bind = FrontendTypeEnv.bind_var_venv in
              let wild_row () =
                let fresh_row = Types.make_empty_open_row (lin_unl, res_any) in
                allow_wild fresh_row
@@ -3359,7 +3366,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                              let (fields,_,_) = TypeUtils.extract_row effrow in
                              let kt = find_effect_type effname (StringMap.to_alist fields) in
                              let op_param = TypeUtils.return_type kt in
-                             let typ = Env.lookup env kname in
+                             let (_, typ) = Env.lookup env kname in
                              let domain =
                                op_param :: handler_params
                              in
@@ -3368,8 +3375,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                              in
                              Types.make_function_type domain effs codomain
                            in
-                           let env = Env.bind env (kname, kt) in
-                           let env' = Env.bind Env.empty (kname, kt) in
+                           let env = bind env (kname, kt) in
+                           let env' = bind Env.empty (kname, kt) in
                            (pat, env, effrow), (kpat, env', kt)
                         | _ -> assert false
                         end
@@ -3379,12 +3386,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         | As (bndr,_)
                         | Variable bndr ->
                            let kname = Binder.to_name bndr in
-                           let kt =
+                           let (_, kt) =
                              match Env.find env kname with
                              | Some t -> t
                              | None -> assert false
                            in
-                           let env' = Env.bind Env.empty (kname, kt) in
+                           let env' = bind Env.empty (kname, kt) in
                            (pat, env, effrow), (kpat, env', kt)
                         | Any ->
                            let kt =
@@ -3417,7 +3424,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              (* Type operation clause bodies and resumptions *)
              let eff_cases =
                List.fold_right
-                 (fun (pat, (kpat : Pattern.with_pos * Types.datatype Env.t * Types.datatype), body) cases ->
+                 (fun (pat, (kpat : Pattern.with_pos * FrontendTypeEnv.qual_var_environment * Types.datatype), body) cases ->
                    let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
@@ -3548,7 +3555,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             (* Pattern we have just bound should either be used, or should be
              * able to be made unrestricted *)
             let () =
-              Env.iter (fun v t ->
+              Env.iter (fun v (_, t) ->
                 let uses = uses_of v (usages in_phrase) in
                 if uses <> 1 then
                   if Types.type_can_be_unl t then
@@ -3572,7 +3579,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               StringMap.iter (fun v n ->
                 if n == 0 then () else
                 if Env.has (pattern_env pat) v then () else
-                  let ty = Env.lookup context.var_env v in
+                  let (_, ty) = Env.lookup context.var_env v in
                   if Types.type_can_be_unl ty then
                     Types.make_type_unl ty
                   else
@@ -3582,7 +3589,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () =
               StringMap.iter (fun v n ->
                 if n == 0 then () else
-                let ty = Env.lookup context.var_env v in
+                let (_, ty) = Env.lookup context.var_env v in
                   if Types.type_can_be_unl ty then
                     Types.make_type_unl ty
                   else
@@ -3651,7 +3658,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let body = erase body in
           let tyvars, pat, penv =
             if Utils.is_generalisable body then
-              let penv = Env.map (snd -<- Utils.generalise context.var_env) penv in
+              let penv = Env.map (fun (orig_path, t) -> orig_path, snd (Utils.generalise context.var_env t)) penv in
               let pat = update_pattern_vars penv (erase_pat pat) in
               let ((tyvars, _), _bt) = Utils.generalise context.var_env bt in
               tyvars, pat, penv
@@ -3712,7 +3719,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
              linearity of their types *)
           let () = List.iter
                      (fun pat ->
-                      Env.iter (fun v t ->
+                      Env.iter (fun v (_, t) ->
                         let uses = uses_of v (usages body) in
                         if uses <> 1 then
                           if Types.type_can_be_unl t then
@@ -3726,7 +3733,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
             if DeclaredLinearity.is_nonlinear lin then
               StringMap.iter (fun v _ ->
                               if not (List.mem v vs) then
-                                let t = Env.lookup context'.var_env v in
+                                let (_, t) = Env.lookup context'.var_env v in
                                 if Types.type_can_be_unl t then
                                   Types.make_type_unl t
                                 else
@@ -3743,7 +3750,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                    (tyvars, (List.map (List.map erase_pat) pats, erase body)),
                    location, t),
              {empty_context with
-                var_env = Env.bind Env.empty (name, ft)},
+                var_env = FrontendTypeEnv.bind_var_venv Env.empty (name, ft)},
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
       | Funs defs ->
           (*
@@ -3793,7 +3800,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                            ft
                      | Some _ -> assert false
                  in
-                   Env.bind inner_env (name, inner), pats::patss)
+                   Env.bind inner_env (name, (None, inner)), pats::patss)
               (Env.empty, []) defs in
           let patss = List.rev patss in
 
@@ -3816,7 +3823,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       let body = type_check (bind_effects context' effects) body in
                       let () =
                         Env.iter
-                          (fun v t ->
+                          (fun v (_, t) ->
                             let uses = uses_of v (usages body) in
                               if uses <> 1 then
                                 begin
@@ -3831,7 +3838,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                         if DeclaredLinearity.is_nonlinear lin then
                           StringMap.iter (fun v _ ->
                                           if not (StringSet.mem v vs) then
-                                            let t = Env.lookup context'.var_env v in
+                                            let (_, t) = Env.lookup context'.var_env v in
                                             if Types.type_can_be_unl t then
                                               Types.make_type_unl t
                                             else
@@ -3862,7 +3869,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
               List.fold_left2
                 (fun (defs, outer_env) (bndr, lin, (_, (_, body)), location, t, pos) pats ->
                    let name = Binder.to_name bndr in
-                   let inner = Env.lookup inner_env name in
+                   let (_, inner) = Env.lookup inner_env name in
                    let inner, outer, tyvars =
                      match inner with
                        | `ForAll (inner_tyvars, inner_body) ->
@@ -3887,7 +3894,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
                      ((Binder.set_type bndr outer, lin, ((tyvars, Some inner), (pats, body)), location, t, pos)::defs,
-                      Env.bind outer_env (name, outer)))
+                      Env.bind outer_env (name, (None, outer))))
                 ([], Env.empty) defs patss
             in
               List.rev defs, outer_env in
@@ -3920,14 +3927,14 @@ and type_binding : context -> binding -> binding * context * usagemap =
          let module_ctx, bindings, usage_builder = type_bindings context bindings in
          (* FIXME: This is unnecessary work, since Env is using a StringMap internally. Should we give Env the ability to expose the StringMap? *)
          let env_to_stringmap env =
-           Env.fold (fun name v map ->
+           Env.fold (fun name (_, v) map ->
                StringMap.add name v map
              ) env StringMap.empty in
          let module_type : Types.module_t = {
              fields  = env_to_stringmap module_ctx.var_env ;
              modules = env_to_stringmap module_ctx.module_env ;
          } in
-         let context' = {empty_context with module_env = Env.bind Env.empty (name, module_type) } in
+         let context' = {empty_context with module_env = Env.bind Env.empty (name, (None, module_type)) } in
          let module_usages = usage_builder StringMap.empty in
           Module (name, Some module_type, bindings), context', module_usages
       | Import _ ->
@@ -3967,7 +3974,7 @@ and type_bindings (globals : context)  bindings =
     List.fold_left (fun usages (pos,env,usage) ->
                     let vs = Env.domain env in
                     Env.iter
-                      (fun v t ->
+                      (fun v (_, t) ->
                         let uses = uses_of v usages in
                           if uses <> 1 then
                             if Types.type_can_be_unl t then

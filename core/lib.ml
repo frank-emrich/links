@@ -19,6 +19,15 @@ let alias_env : FrontendTypeEnv.tycon_environment =
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
+
+
+module BuiltinModules =
+struct
+  let lib = "Lib"
+  let prelude = "Prelude"
+end
+
+
 (*
   assumption:
     the only kind of lists that are allowed to be inserted into databases
@@ -1589,12 +1598,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    knowing that they are in fact tame
 *)
 let patch_prelude_funs tyenv =
+  let prelude_id = Some (QualifiedName.of_name BuiltinModules.prelude) in
   {tyenv with
      FrontendTypeEnv.var_env =
       List.fold_right
         (fun (name, t) env ->
           if Env.String.has env name then
-            Env.String.bind env (name, t)
+            Env.String.bind env (name, (prelude_id, t))
           else
             env)
         [("map", datatype "((a) -b-> c, [a]) -b-> [c]");
@@ -1647,8 +1657,9 @@ let value_array : primitive option array =
 let is_primitive_var var =
   minvar <= var && var <= maxvar
 
-let type_env : FrontendTypeEnv.var_environment =
-  List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
+let type_env : FrontendTypeEnv.qual_var_environment =
+  let lib_id = Some (QualifiedName.of_name BuiltinModules.lib) in
+  List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, (lib_id, t))) env Env.String.empty
 
 let typing_env = {FrontendTypeEnv.var_env = type_env;
                   tycon_env = alias_env;
