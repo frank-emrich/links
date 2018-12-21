@@ -101,6 +101,8 @@ and handler_depth = | Deep of (binder * value) list | Shallow
 val binding_scope : binding -> scope
 val binder_of_fun_def : fun_def -> binder
 
+val binders_of_binding : binding -> binder list
+
 val tapp : value * tyarg list -> value
 
 val letm : binder * tail_computation -> binding
@@ -125,3 +127,5 @@ val string_of_program : program -> string
 
 type eval_fun_def = var_info * (var list * computation) * Var.var option * location
   [@@deriving show]
+
+val program_of_bindings : binding list -> program
