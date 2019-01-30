@@ -4,6 +4,16 @@ open SourceCode.WithPos
 open Sugartypes
 open Operators
 
+
+type binding_groups = binding list list [@@deriving show]
+
+type string_list_list = int list [@@deriving show]
+
+let show_binding_groups (bss : binding_groups) : string  =
+  let string_ll = List.map List.length bss in
+  show_string_list_list string_ll
+
+
 (* Helper function: add a group to a list of groups *)
 let add group groups = match group with
   | [] -> groups
@@ -16,7 +26,7 @@ let add group groups = match group with
 let refine_bindings : binding list -> binding list =
   fun bindings ->
     (* Group sequences of functions together *)
-    let initial_groups =
+    let initial_groups bs =
 
       (* Technically it shouldn't be necessary to ensure that the
          order of functions defined within a group is preserved (the
@@ -49,7 +59,7 @@ let refine_bindings : binding list -> binding list =
               | Infix ->
                  (* discard binding *)
                  (thisgroup, othergroups))
-            bindings ([], [])
+            bs ([], [])
       in
         add group groups
     in
@@ -95,15 +105,20 @@ let refine_bindings : binding list -> binding list =
           sccs
     in
       (* refine a group of bindings *)
-    let groupBindings = function
+    let rec groupBindings = function
         (* TODO:
 
            Compute the position corresponding to the whole collection
            of functions.
         *)
       | {node=Fun _; _}::_ as funs -> groupFuns funs
+      | [{node=Module (name, ty, mod_bindings); _} as modu ] ->
+        let the_initial_groups = (initial_groups mod_bindings) in
+        let refined_mod_bindings = concat_map groupBindings the_initial_groups in
+        let new_module = make ~pos:(pos modu) (Module (name, ty, refined_mod_bindings)) in
+        [new_module]
       | binds -> binds in
-    concat_map groupBindings initial_groups
+    concat_map groupBindings (initial_groups bindings)
 
 (*
   * We need three traversals:
@@ -402,7 +417,7 @@ module RefineTypeBindings = struct
     | _ -> false
 
   (* Performs type refinement on a binding group. *)
-  let refineGroup : binding list -> binding list = function
+  let rec refineGroup : binding list -> binding list = function
     | binds when isTypeGroup binds ->
       (* Create a hashtable mapping names to type bindings. *)
       let ht = Hashtbl.create 30 in
@@ -422,6 +437,10 @@ module RefineTypeBindings = struct
             refineSCCGroup refInfoTable ht sccGroup
           ) sccList
       )
+    | [{node = Module (name, ty, mod_bindings); _} as modu] ->
+      let refined_mod_bindings = concat_map refineGroup (initialGroups mod_bindings) in
+      let new_module = make ~pos:(pos modu) (Module (name, ty, refined_mod_bindings)) in
+        [new_module]
     | xs -> xs
   (* Refines a list of bindings. *)
   let refineTypeBindings : binding list -> binding list =
