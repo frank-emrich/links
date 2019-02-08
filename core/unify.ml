@@ -44,7 +44,11 @@ let var_is_free_in_type var datatype = TypeVarSet.mem var (free_type_vars dataty
 inside points *)
 let rec eq_types : (datatype * datatype) -> bool =
   fun (t1, t2) ->
-    let rec unalias = function
+    match (t1, t2) with
+      | `Alias ((name1, args1), _), `Alias ((name2, args2), _) when name1 = name2 ->
+        List.for_all2 (curry eq_type_args) args1 args2
+      | _ ->
+    (let rec unalias = function
       | `Alias (_, x) -> unalias x
       | x             -> x in
     match unalias t1 with
@@ -114,7 +118,7 @@ let rec eq_types : (datatype * datatype) -> bool =
 
       | `Alias  _ -> assert false
       | `Table _  -> assert false
-      | `Lens _ -> true
+      | `Lens _ -> true)
 and eq_sessions : (datatype * datatype) -> bool =
   function
   | `Input (lt, _), `Input (rt, _)
@@ -564,6 +568,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
           *)
          | `Body t' -> ut (t, t')
        end
+    | `Alias ((name1, args1), _), `Alias ((name2, args2), _) when name1 = name2 ->
+      (* This hacks nominal types by making the un-enforced assumption that all type names are unique *)
+      List.iter2 (curry (unify_type_args' rec_env)) args1 args2
     | `Alias (_, t1), t2
       | t1, `Alias (_, t2) -> ut (t1, t2)
     | `Function (lfrom, lm, lto), `Function (rfrom, rm, rto) ->
