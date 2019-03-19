@@ -5,15 +5,6 @@ open Sugartypes
 open Operators
 
 
-type binding_groups = binding list list [@@deriving show]
-
-type string_list_list = int list [@@deriving show]
-
-let show_binding_groups (bss : binding_groups) : string  =
-  let string_ll = List.map List.length bss in
-  show_string_list_list string_ll
-
-
 (* Helper function: add a group to a list of groups *)
 let add group groups = match group with
   | [] -> groups
