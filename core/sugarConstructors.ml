@@ -29,6 +29,10 @@ module SugarConstructors (Position : Pos)
     incr type_variable_counter;
     ("_" ^ string_of_int (!type_variable_counter), None, freedom)
 
+
+  let tyvar (tv : Sugartypes.type_variable) : Sugartypes.tyvar =
+    let _ = tv in (failwith "123")
+
   (** Helper data types and functions for passing arguments to smart
       constructors. *)
 
@@ -151,11 +155,12 @@ module SugarConstructors (Position : Pos)
 
   (** Bindings *)
   (* Create a function binding. *)
-  let fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, args, location, blk) =
+  let fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, tyvars, args, location, blk) =
+    let tyvars' = List.map tyvar tyvars in
     let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
     with_pos ppos (Fun { fun_binder = binder bndr;
                          fun_linearity = linearity;
-                         fun_definition = ([], (args, blk));
+                         fun_definition = (tyvars', (args, blk));
                          fun_location = location;
                          fun_signature;
                          fun_frozen = frozen;

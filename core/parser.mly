@@ -318,6 +318,7 @@ let parse_foreign_language pos lang =
 %type <Sugartypes.regex list> regex_pattern_sequence
 %type <Sugartypes.Pattern.with_pos> pattern
 %type <(DeclaredLinearity.t * bool) * Name.t *
+       Sugartypes.type_variable list *
        Sugartypes.Pattern.with_pos list list * Location.t *
        Sugartypes.phrase> tlfunbinding
 %type <Sugartypes.phrase> postfix_expression
@@ -327,6 +328,10 @@ let parse_foreign_language pos lang =
 %type <(string * Sugartypes.phrase list) list> attr_list
 %type <Sugartypes.phrase list> attr_val
 %type <Sugartypes.binding> binding
+
+%type <Sugartypes.type_variable * tyvar option> typearg
+%type <(Sugartypes.type_variable * tyvar option) list> varlist
+
 
 %%
 
@@ -434,10 +439,15 @@ fun_kind:
 | FROZEN_LINFUN                                                { (dl_lin, true) }
 
 tlfunbinding:
-| fun_kind VARIABLE arg_lists perhaps_location block           { ($1, $2, $3, $4, $5)                }
-| OP pattern sigop pattern perhaps_location block              { ((dl_unl, false), WithPos.node $3, [[$2; $4]], $5, $6) }
-| OP PREFIXOP pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
-| OP pattern POSTFIXOP perhaps_location block                  { ((dl_unl, false), $3, [[$2]], $4, $5)          }
+| fun_kind
+     VARIABLE
+     loption(fun_type_abstrs)
+     arg_lists
+     perhaps_location
+     block                                                     { ($1, $2, $3, $4, $5, $6)                }
+| OP pattern sigop pattern perhaps_location block              { ((dl_unl, false), WithPos.node $3, [], [[$2; $4]], $5, $6) }
+| OP PREFIXOP pattern perhaps_location block                   { ((dl_unl, false), $2, [], [[$3]], $4, $5)          }
+| OP pattern POSTFIXOP perhaps_location block                  { ((dl_unl, false), $3, [], [[$2]], $4, $5)          }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
@@ -449,6 +459,10 @@ signatures:
 signature:
 | SIG var COLON datatype                                       { with_pos $loc ($2, datatype $4) }
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
+
+
+fun_type_abstrs:
+| LBRACKET varlist RBRACKET                                    { labels $2 }
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [with_pos $loc ($2, $3, datatype $5)]) }
@@ -927,8 +941,17 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| signatures fun_kind VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
-| fun_kind VARIABLE arg_lists block                            { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
+| signatures
+    fun_kind
+    VARIABLE
+    loption(fun_type_abstrs)
+    arg_lists
+    block                                                      { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, $5, loc_unknown, $6) }
+| fun_kind
+    VARIABLE
+    loption(fun_type_abstrs)
+    arg_lists
+    block                                                      { fun_binding ~ppos:$loc None ($1, $2, $3, $4, loc_unknown, $5) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 

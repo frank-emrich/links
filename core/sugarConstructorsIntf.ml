@@ -64,6 +64,8 @@ module type SugarConstructorsSig = sig
   val constructor :
     ?ppos:t -> ?body:phrase -> ?ty:Types.datatype -> Name.t -> phrase
 
+  val tyvar : Sugartypes.type_variable -> Sugartypes.tyvar
+
   (* Constants *)
   val constant      : ?ppos:t -> Constant.t -> phrase
   val constant_str  : ?ppos:t -> string     -> phrase
@@ -107,7 +109,7 @@ module type SugarConstructorsSig = sig
   (* Bindings *)
   val fun_binding
       : ?ppos:t -> signature -> ?unsafe_sig:bool
-     -> ((DeclaredLinearity.t * bool) * Name.t * Pattern.with_pos list list * Location.t * phrase)
+     -> ((DeclaredLinearity.t * bool) * Name.t * type_variable list * Pattern.with_pos list list * Location.t * phrase)
      -> binding
   val fun_binding'
       : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:tyvar list

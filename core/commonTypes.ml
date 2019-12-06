@@ -138,6 +138,10 @@ module Quantifier = struct
   type t = int * Kind.t
     [@@deriving show]
 
+
+  let dummy  = (-1, (pk_type, (res_any, lin_unl)), `Rigid )
+
+
   let to_var = function
     | (var, _) -> var
 
