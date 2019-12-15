@@ -3302,7 +3302,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                           let rettyp = Types.for_all (rqs, rettyp) in
                           let ft = `Function (fps, fe, rettyp) in
                           let f' = erase f in
-                          let e = tabstr (rqs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
+                          let rtvs = List.map tyvar_of_quantifier rqs in
+                          let e = tabstr (rtvs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
                           unify ~handle:Gripers.fun_apply
                             ((exp_pos f, ft), no_pos (mkft (Types.make_tuple_type (List.map typ ps),
                                                             context.effect_row,
@@ -3325,10 +3326,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                       end;
                       FnAppl (erase f, List.map erase ps), rettyp, Usage.combine_many (usages f :: List.map usages ps)
               end
-        | TAbstr (qs, e) ->
+        | TAbstr (tyvars, e) ->
             let e, t, u = tc e in
+            let qs = List.map Sugartypes.quantifier_of_tyvar tyvars in
             let t = Types.for_all(qs, t) in
-              tabstr (qs, e.node), t, u
+              tabstr (tyvars, e.node), t, u
         | TAppl (e, tyargs) ->
            let e, t, u = tc e in
 
@@ -3356,7 +3358,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | Generalise e ->
            let e, t, u = tc e in
            if Utils.is_generalisable e then
-             let ((tyvars, _), t) = Utils.generalise ~unwrap:false context.var_env t in
+             let ((qs, _), t) = Utils.generalise ~unwrap:false context.var_env t in
+             let tyvars = List.map Sugartypes.tyvar_of_quantifier qs in
              match tyvars with
              | [] -> WithPos.node e, t, u
              | _ -> TAbstr (tyvars, e), t, u
@@ -3629,7 +3632,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                              no_pos (`Record (Types.make_singleton_closed_row
                                                 (l, `Present (Types.fresh_type_variable (lin_any, res_any))))));
                           let r' = erase r in
-                          let e = tabstr (pqs, Projection (with_dummy_pos (tappl (r'.node, tyargs)), l)) in
+                          let ptvs = List.map Sugartypes.tyvar_of_quantifier pqs in
+                          let e = tabstr (ptvs, Projection (with_dummy_pos (tappl (r'.node, tyargs)), l)) in
                           e, fieldtype, usages r
                         | Some (`Absent | `Var _)
                         | None ->
@@ -4185,7 +4189,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           Types.Mono.make_type (pattern_typ pat);
           let usage = usages body in
           let body = erase body in
-          let tyvars, pat, penv =
+          let qs, pat, penv =
             if Utils.is_generalisable body then
               let penv = Env.map (snd -<- Utils.generalise context.var_env) penv in
               let pat = update_pattern_vars penv (erase_pat pat) in
@@ -4199,6 +4203,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               | [] -> [], erase_pat pat, penv
               | _ -> Gripers.value_restriction pos bt
           in
+          let tyvars = List.map Sugartypes.tyvar_of_quantifier qs in
             Val (pat, (tyvars, body), location, datatype),
             {empty_context with
               var_env = penv},
@@ -4309,7 +4314,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               check_escaped_quantifiers quantifiers context.var_env in
 
           let ft = if unsafe then check_unsafe_signature context unify_nopos ft t_ann' else ft in
-          let (tyvars, _), ft =
+          let (qs, _), ft =
             if fun_frozen then (TypeUtils.quantifiers ft, []), ft
             else Utils.generalise context.var_env ft
           in
@@ -4319,20 +4324,20 @@ and type_binding : context -> binding -> binding * context * Usage.t =
              or promising that they're complete - in order to denote
              their kinds if nothing else *)
 
-          let tyvars, ft =
+          let qs, ft =
             (* generalise *)
             (* check that tyvars matches up those from any type
                annotation *)
             match t_ann with
-            | None -> tyvars, ft
+            | None -> qs, ft
             | Some t ->
                begin
                  match TypeUtils.quantifiers t with
-                 | [] -> tyvars, ft
+                 | [] -> qs, ft
                  | t_tyvars ->
                    if not (List.for_all
                              (fun q ->
-                               List.exists (Quantifier.eq q) t_tyvars) tyvars)
+                               List.exists (Quantifier.eq q) t_tyvars) qs)
                    then
                      Gripers.inconsistent_quantifiers ~pos ~t1:t ~t2:ft;
                    t_tyvars, t
@@ -4340,6 +4345,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
           (* let ft = Instantiate.freshen_quantifiers ft in *)
           let vs' = List.fold_right Ident.Set.add vs Ident.Set.empty in
+          let tyvars = List.map Sugartypes.tyvar_of_quantifier qs in
           (Fun { fun_binder = Binder.set_type bndr ft;
                  fun_linearity = lin;
                  fun_definition = (tyvars, (List.map (List.map erase_pat) pats, erase body));
@@ -4577,9 +4583,10 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
+                   let tyvars' = List.map Sugartypes.tyvar_of_quantifier tyvars in
                    (make ~pos { fn with
                       rec_binder = Binder.set_type bndr outer;
-                      rec_definition = ((tyvars, Some inner), (pats, body)) }::defs,
+                      rec_definition = ((tyvars', Some inner), (pats, body)) }::defs,
                       Env.bind name outer outer_env))
                 ([], Env.empty) defs patss
             in
@@ -4824,8 +4831,9 @@ let type_check_general context body =
     | (qs, _), qtyp ->
        let ppos = WithPos.pos body in
        let open SugarConstructors.SugartypesPositions in
+       let tyvars = List.map Sugartypes.tyvar_of_quantifier qs in
        block ~ppos
-         ([with_pos ppos (Val (variable_pat ~ppos ~ty:qtyp "it", (qs, body), loc_unknown, None))],
+         ([with_pos ppos (Val (variable_pat ~ppos ~ty:qtyp "it", (tyvars, body), loc_unknown, None))],
           freeze_var ~ppos "it"),
        qtyp
   else

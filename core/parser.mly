@@ -329,8 +329,8 @@ let parse_foreign_language pos lang =
 %type <Sugartypes.phrase list> attr_val
 %type <Sugartypes.binding> binding
 
-%type <Sugartypes.type_variable * tyvar option> typearg
-%type <(Sugartypes.type_variable * tyvar option) list> varlist
+%type <Sugartypes.type_variable * Quantifier.t option> typearg
+%type <(Sugartypes.type_variable * Quantifier.t option) list> varlist
 
 
 %%

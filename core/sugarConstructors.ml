@@ -31,7 +31,9 @@ module SugarConstructors (Position : Pos)
 
 
   let tyvar (tv : Sugartypes.type_variable) : Sugartypes.tyvar =
-    let _ = tv in (failwith "123")
+    Some tv, Quantifier.dummy
+
+
 
   (** Helper data types and functions for passing arguments to smart
       constructors. *)

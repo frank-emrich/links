@@ -1423,14 +1423,16 @@ class fold =
 
     method typenamenode : typenamenode -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->
+      (* FIXME adapt once typenames changed to tyvar *)
       let o = o#name _x in
       let o =
         o#list
           (fun o (_x, _x_i1) ->
-            let o = o#option (fun o -> o#tyvar) _x_i1
+            let o = o
             in o) _x_i1 in
       let o = o#datatype' _x_i2 in
       o
+
 
     method typename : typename -> 'self_type =
       WithPos.traverse
@@ -2360,7 +2362,7 @@ class fold_map =
       | `Row r -> let o, r = o#type_row r in o, `Row r
       | `Presence p -> let o, p =o#type_field_spec p in o, `Presence p
 
-    method tyvar : Quantifier.t -> ('self_type * Quantifier.t) =
+    method tyvar : Sugartypes.tyvar -> ('self_type * Sugartypes.tyvar) =
       o#unknown
 
     method type_field_spec : Types.field_spec -> ('self_type * Types.field_spec) =

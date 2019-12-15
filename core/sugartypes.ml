@@ -54,18 +54,7 @@ end = struct
       )
 end
 
-(* type variables *)
-type tyvar = Quantifier.t
-  [@@deriving show]
-type tyarg = Types.type_arg
-  [@@deriving show]
 
-(*
-   NOTE: tyvar lists represent big-lambda binders.
-
-   Currently they are only supported at HM generalisation points,
-   i.e. in let-bindings.
-*)
 
 let default_subkind : Subkind.t = (lin_unl, res_any)
 let default_effect_subkind : Subkind.t = (lin_unl, res_any)
@@ -82,6 +71,22 @@ type known_type_variable = Name.t * Subkind.t option * Freedom.t
 
 type quantifier = type_variable
   [@@deriving show]
+
+
+(*
+   NOTE: tyvar lists represent big-lambda binders.
+
+   Currently they are only supported at HM generalisation points,
+   i.e. in let-bindings.
+*)
+type tyvar = type_variable option * Quantifier.t
+  [@@deriving show]
+type tyarg = Types.type_arg
+  [@@deriving show]
+
+let quantifier_of_tyvar = snd
+let tyvar_of_quantifier q = (None, q)
+
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 

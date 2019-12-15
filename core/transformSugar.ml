@@ -382,11 +382,12 @@ class transform (env : Types.typing_environment) =
             (o, FnAppl (f, args), TypeUtils.return_type ft)
       | TAbstr (tyvars, e) ->
           let outer_tyvars = o#backup_quantifiers in
-          let (o, qs) = o#quantifiers tyvars in
+          let (o, tyvars) = o#tyvars tyvars in
           let (o, e, t) = o#phrase e in
           let o = o#restore_quantifiers outer_tyvars in
+          let qs = List.map Sugartypes.quantifier_of_tyvar tyvars in
           let t = Types.for_all (qs, t) in
-            (o, tabstr (qs, e.node), t)
+            (o, tabstr (tyvars, e.node), t)
       | TAppl (e, tyargs) ->
           let (o, e, t) = o#phrase e in
             check_type_application
@@ -730,7 +731,7 @@ class transform (env : Types.typing_environment) =
         | Constant.Bool v   -> (o, Constant.Bool v  , Types.bool_type  )
         | Constant.Char v   -> (o, Constant.Char v  , Types.char_type  )
 
-    method quantifiers : Quantifier.t list -> ('self_type * Quantifier.t list) =
+    method tyvars : Sugartypes.tyvar list -> ('self_type * Sugartypes.tyvar list) =
       fun qs -> (o, qs)
     method backup_quantifiers : IntSet.t = IntSet.empty
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o
@@ -741,7 +742,7 @@ class transform (env : Types.typing_environment) =
         function
           | [] -> (o, [])
           | {node={ rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn; pos} :: defs ->
-              let (o, tyvars) = o#quantifiers tyvars in
+              let (o, tyvars) = o#tyvars tyvars in
               let (o, inner) = o#datatype inner in
               let inner_effects = fun_effects inner (fst lam) in
               let (o, lam, _) = o#funlit inner_effects lam in
@@ -779,7 +780,7 @@ class transform (env : Types.typing_environment) =
       function
       | Val (p, (tyvars, e), location, t) ->
          let outer_tyvars = o#backup_quantifiers in
-         let (o, tyvars) = o#quantifiers tyvars in
+         let (o, tyvars) = o#tyvars tyvars in
          let (o, e, _) = o#phrase e in
          let o = o#restore_quantifiers outer_tyvars in
          let (o, p) = o#pattern p in
@@ -789,7 +790,7 @@ class transform (env : Types.typing_environment) =
               fun_location; fun_signature; fun_frozen; fun_unsafe_signature }
            when Binder.has_type fun_binder ->
          let outer_tyvars = o#backup_quantifiers in
-         let (o, tyvars) = o#quantifiers tyvars in
+         let (o, tyvars) = o#tyvars tyvars in
          let inner_effects = fun_effects (Binder.to_type fun_binder) (fst lam) in
          let (o, lam, _) = o#funlit inner_effects lam in
          let o = o#restore_quantifiers outer_tyvars in

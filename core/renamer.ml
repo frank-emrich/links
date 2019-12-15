@@ -164,7 +164,8 @@ let renamer qs_from qs_to =
          (* Invariant: both signature and pat use quantifiers identical to
             tyvars.  If this invariant is ever to be changed then type variable
             shadowing needs to be done separately for pat and signature. *)
-          let maps = shadow_vars maps tyvars in
+          let qs = List.map Sugartypes.quantifier_of_tyvar tyvars in
+          let maps = shadow_vars maps qs in
 
           let o, old_maps   = o#with_maps maps in
           let o, pat'       = o#pattern pat in
@@ -231,7 +232,8 @@ let renamer qs_from qs_to =
       (* Invariant: both signature, typ and param_pats use quantifiers identical
          to tyvars.  If this invariant is ever to be changed then type variable
          shadowing needs to be done separately for pat and signature. *)
-      let maps = shadow_vars maps tyvars in
+      let qs = List.map Sugartypes.quantifier_of_tyvar tyvars in
+      let maps = shadow_vars maps qs in
       let o, old_maps    = o#with_maps maps in
       let _, param_pats' = o#list o#pattern_list param_pats in
       let typ', _        = (renaming_type_visitor maps)#typ typ in
@@ -253,20 +255,22 @@ let renamer qs_from qs_to =
 let rename_function_definition : function_definition -> function_definition =
   fun { fun_binder
       ; fun_linearity
-      ; fun_definition = (qs_from, (pats, body))
+      ; fun_definition = (tyvars_from, (pats, body))
       ; fun_location
       ; fun_signature
       ; fun_frozen
       ; fun_unsafe_signature } ->
+  let qs_from = List.map Sugartypes.quantifier_of_tyvar tyvars_from in
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let o             = renamer qs_from qs_to in
   let typ'          = o#forall (Binder.to_type fun_binder) in
   let _, pats'      = List.split (List.map (o#pattern_list o) pats) in
   let _, body'      = o#phrase body in
   let _, signature' = o#option (fun o -> o#datatype') fun_signature in
+  let tyvars_to = List.map Sugartypes.tyvar_of_quantifier qs_to in
   { fun_binder =  Binder.set_type fun_binder typ'
   ; fun_linearity
-  ; fun_definition = (qs_to, (pats', body'))
+  ; fun_definition = (tyvars_to, (pats', body'))
   ; fun_location
   ; fun_signature = signature'
   ; fun_frozen
@@ -277,11 +281,12 @@ let rename_recursive_functionnode :
       recursive_functionnode -> recursive_functionnode =
   fun { rec_binder
       ; rec_linearity
-      ; rec_definition = ((qs_from, ty), (pats, body))
+      ; rec_definition = ((tyvars_from, ty), (pats, body))
       ; rec_location
       ; rec_signature
       ; rec_frozen
       ; rec_unsafe_signature } ->
+  let qs_from = List.map Sugartypes.quantifier_of_tyvar tyvars_from in
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let o             = renamer qs_from qs_to in
   let typ'          = o#forall (Binder.to_type rec_binder) in
@@ -289,9 +294,10 @@ let rename_recursive_functionnode :
   let _, ty'        = o#option (fun o (ty, x) -> o, (o#forall ty, x)) ty in
   let _, body'      = o#phrase body in
   let _, signature' = o#option (fun o -> o#datatype') rec_signature in
+  let tyvars_to = List.map Sugartypes.tyvar_of_quantifier qs_to in
   { rec_binder =  Binder.set_type rec_binder typ'
   ; rec_linearity
-  ; rec_definition = ((qs_to, ty'), (pats', body'))
+  ; rec_definition = ((tyvars_to, ty'), (pats', body'))
   ; rec_location
   ; rec_signature = signature'
   ; rec_frozen

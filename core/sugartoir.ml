@@ -855,7 +855,8 @@ struct
               I.apply (ev e, evs es)
           | TAbstr (tyvars, e) ->
               let v = ev e in
-                cofv (I.tabstr (tyvars, v))
+              let qs = List.map Sugartypes.quantifier_of_tyvar tyvars in
+                cofv (I.tabstr (qs, v))
           | TAppl (e, tyargs) ->
               let v = ev e in
               let vt = I.sem_type v in
@@ -1113,10 +1114,11 @@ struct
                     let x  = Binder.to_name bndr in
                     let xt = Binder.to_type bndr in
                     let x_info = (xt, x, scope) in
+                    let qs = List.map Sugartypes.quantifier_of_tyvar tyvars in
                       I.letvar
                         (x_info,
                          ec body,
-                         tyvars,
+                         qs,
                          fun v ->
                            eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Val (p, (_, body), _, _) ->
@@ -1130,6 +1132,7 @@ struct
                     let f  = Binder.to_name bndr in
                     let ft = Binder.to_type bndr in
                     let eff = TypeUtils.effect_row ft in
+                    let qs = List.map Sugartypes.quantifier_of_tyvar tyvars in
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
@@ -1140,7 +1143,7 @@ struct
                     let body = eval body_env body in
                       I.letfun
                         env
-                        ((ft, f, scope), (tyvars, (ps, body)), location)
+                        ((ft, f, scope), (qs, (ps, body)), location)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
                 | Exp e' ->
                     I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
@@ -1165,6 +1168,7 @@ struct
                           let ft = Binder.to_type bndr in
                           let eff = TypeUtils.effect_row ft in
                           let ps = List.hd pss in
+                          let qs = List.map Sugartypes.quantifier_of_tyvar tyvars in
                           let ps, body_env =
                              List.fold_right
                                (fun p (ps, body_env) ->
@@ -1173,7 +1177,7 @@ struct
                                ps
                                ([], env) in
                            let body = fun vs -> eval (extend fs (List.combine vs inner_fts) body_env) body in
-                             ((ft, f, scope), (tyvars, (ps, body)), location))
+                             ((ft, f, scope), (qs, (ps, body)), location))
                         (nodes_of_list defs)
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)

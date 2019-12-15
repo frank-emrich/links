@@ -139,7 +139,7 @@ module Quantifier = struct
     [@@deriving show]
 
 
-  let dummy  = (-1, (pk_type, (res_any, lin_unl)), `Rigid )
+  let dummy : t = (-1, (pk_type, (lin_unl, res_any)))
 
 
   let to_var = function
